@@ -85,11 +85,14 @@ class CoverageAnalyzer {
         for line in lines {
             var key: [String] = []
             line.path.pathComponents.forEach { pathElement in
+                var def: CoverageAnalysisLine?
                 key.append(pathElement)
-                let keyString = key.joined(separator: "/").replacingOccurrences(of: "//", with: "/")
-                let path = URL(fileURLWithPath: keyString, isDirectory: true).standardizedFileURL
-                let def = CoverageAnalysisLine(path: path)
-                result.updateValue(forKey: key, default: def) { value in
+                if result[key] == nil {
+                    let pathString = key.joined(separator: "/")
+                    let path = URL(fileURLWithPath: pathString, isDirectory: true).standardizedFileURL
+                    def = CoverageAnalysisLine(path: path)
+                }
+                result.updateValue(forKey: key, default: def ?? line) { value in
                     value.executableLines += line.executableLines
                     value.coveredLines += line.coveredLines
                 }
@@ -114,20 +117,21 @@ class CoverageAnalyzer {
         result = lines.sorted { lhs, rhs in
             let lhComp = lhs.path.pathComponents
             let rhComp = rhs.path.pathComponents
-            var key1: [String] = []
-            var key2: [String] = []
+            var lhKey: [String] = []
+            var rhKey: [String] = []
             var idx = 0
             repeat {
-                key1.append(lhComp[idx])
-                key2.append(rhComp[idx])
+                lhKey.append(lhComp[idx])
+                rhKey.append(rhComp[idx])
                 idx += 1
             } while lhComp[idx - 1] == rhComp[idx - 1] && (idx < lhComp.count && idx < rhComp.count)
-            let lookup1 = lookup[key1] ?? 0
-            let lookup2 = lookup[key2] ?? 0
-            if lookup1 == lookup2 {
-                return key1.joined().localizedStandardCompare(key2.joined()) == .orderedDescending
+            let lhLookup = lookup[lhKey] ?? 0
+            let rhLookup = lookup[rhKey] ?? 0
+            if lhLookup == rhLookup {
+                // If the two lookups have an equal number of missedLines use string compare
+                return lhKey.joined().localizedStandardCompare(rhKey.joined()) == .orderedDescending
             } else {
-                return lookup[key1] ?? 0 > lookup[key2] ?? 0
+                return lhLookup > rhLookup
             }
         }
         return result
