@@ -14,9 +14,8 @@ public struct XCResultFormatter {
     
     private let resultFile: XCResultFile
     private let invocationRecord: ActionsInvocationRecord
-    private let codeCoverage: CodeCoverage?
     private let outputFormatter: XCResultFormatting
-    private let coverageTargets: Set<String>
+    private let coverageTargets: [String]
     
     private var numFormatter: NumberFormatter = {
         let numFormatter = NumberFormatter()
@@ -30,6 +29,10 @@ public struct XCResultFormatter {
         return numFormatter
     }()
     
+    private var coverageFormatter: CoverageFormatter {
+        return CoverageFormatter(resultFile: resultFile, outputFormatter: outputFormatter, coverageTargets: coverageTargets)
+    }
+    
     // MARK: - Initializer
     
     public init?(with url: URL,
@@ -42,8 +45,7 @@ public struct XCResultFormatter {
         }
         invocationRecord = record
         outputFormatter = formatter
-        codeCoverage = resultFile.getCodeCoverage()
-        self.coverageTargets = codeCoverage?.targets(filteredBy: coverageTargets) ?? []
+        self.coverageTargets = coverageTargets
         
         //if let logsId = invocationRecord?.actions.last?.actionResult.logRef?.id {
         //    let testLogs = resultFile.getLogs(id: logsId)
@@ -73,7 +75,7 @@ public struct XCResultFormatter {
         return outputFormatter.documentSuffix
     }
     public var coverageDetails: String {
-        return createCoverageReport().joined(separator: "\n")
+        return coverageFormatter.createCoverageReport().joined(separator: "\n")
     }
     
     // MARK: - Private API
@@ -195,105 +197,6 @@ public struct XCResultFormatter {
     
     private func actionTestFailureStatusString(with header: String, and failure: TestFailureIssueSummary) -> String {
         return outputFormatter.failedTestItem(header, message: failure.message)
-    }
-    
-    private func createCoverageReport() -> [String] {
-        var lines = [String]()
-        lines.append(
-            outputFormatter.testConfiguration("Coverage report")
-        )
-        guard let codeCoverage = codeCoverage else {
-            return lines
-        }
-        var executableLines: Int = 0
-        var coveredLines: Int = 0
-        for target in codeCoverage.targets {
-            guard coverageTargets.contains(target.name) else { continue }
-            let covPercent = percentFormatter.unwrappedString(for: (target.lineCoverage * 100))
-            executableLines += target.executableLines
-            coveredLines += target.coveredLines
-            lines.append(
-                outputFormatter.codeCoverageTargetSummary(
-                    "\(target.name): \(covPercent)% (\(target.coveredLines)/\(target.executableLines))"
-                )
-            )
-            if !outputFormatter.accordionOpenTag.isEmpty {
-                lines.append(
-                    outputFormatter.accordionOpenTag
-                )
-            }
-            for file in target.files {
-                let covPercent = percentFormatter.unwrappedString(for: (file.lineCoverage * 100))
-                lines.append(
-                    outputFormatter.codeCoverageFileSummary(
-                        "\(file.name): \(covPercent)% (\(file.coveredLines)/\(file.executableLines))"
-                    )
-                )
-                if !outputFormatter.accordionOpenTag.isEmpty {
-                    lines.append(
-                        outputFormatter.accordionOpenTag
-                    )
-                }
-                if !outputFormatter.tableOpenTag.isEmpty {
-                    lines.append(
-                        outputFormatter.tableOpenTag
-                    )
-                }
-                for function in file.functions {
-                    let covPercentLine = percentFormatter.unwrappedString(for: (function.lineCoverage * 100))
-                    lines.append(
-                        outputFormatter.codeCoverageFunctionSummary(
-                            ["\(covPercentLine)%", "\(function.name):\(function.lineNumber)",  "(\(function.coveredLines)/\(function.executableLines))", "\(function.executionCount) times"
-                            ]
-                        )
-                    )
-                }
-                if !outputFormatter.tableCloseTag.isEmpty {
-                    lines.append(
-                        outputFormatter.tableCloseTag
-                    )
-                }
-                if !outputFormatter.accordionCloseTag.isEmpty {
-                    lines.append(
-                        outputFormatter.accordionCloseTag
-                    )
-                }
-            }
-            if !outputFormatter.accordionCloseTag.isEmpty {
-                lines.append(
-                    outputFormatter.accordionCloseTag
-                )
-            }
-        }
-        // Append the total coverage below the header
-        guard executableLines > 0 else { return lines }
-        let fraction = Double(coveredLines) / Double(executableLines)
-        let covPercent: String = percentFormatter.unwrappedString(for: fraction * 100)
-        let line = outputFormatter.codeCoverageTargetSummary("Total coverage: \(covPercent)% (\(coveredLines)/\(executableLines))")
-        lines.insert(line, at: 1)
-        return lines
-    }
-}
-
-private extension CodeCoverage {
-    func targets(filteredBy filter: [String]) -> Set<String> {
-        let targetNames = targets.map { $0.name }
-        guard !filter.isEmpty else {
-            return Set(targetNames)
-        }
-        let filterSet = Set(filter)
-        let filtered = targetNames.filter { thisTarget in
-            // Clean up target.name. Split on '.' because the target.name is appended with .framework or .app
-            guard let stripped = thisTarget.split(separator: ".").first else { return true }
-            return filterSet.contains(String(stripped))
-        }
-        return Set(filtered)
-    }
-}
-
-private extension NumberFormatter {
-    func unwrappedString(for input: Double?) -> String {
-        return string(for: input) ?? ""
     }
 }
 

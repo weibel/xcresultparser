@@ -16,6 +16,7 @@ public struct CLIResultFormatter: XCResultFormatting {
     public func documentPrefix(title: String) -> String {
         return ""
     }
+    public let format: OutputFormat = .cli
     public var documentSuffix: String {
         return ""
     }

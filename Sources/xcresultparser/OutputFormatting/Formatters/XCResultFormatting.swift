@@ -9,6 +9,7 @@ import Foundation
 
 public protocol XCResultFormatting {
     func documentPrefix(title: String) -> String
+    var format: OutputFormat { get }
     var documentSuffix: String { get }
     var divider: String { get }
     

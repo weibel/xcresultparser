@@ -15,6 +15,7 @@ public struct TextResultFormatter: XCResultFormatting {
     public func documentPrefix(title: String) -> String {
         return ""
     }
+    public let format: OutputFormat = .txt
     public var documentSuffix: String {
         return ""
     }

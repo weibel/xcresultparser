@@ -9,7 +9,7 @@ import Foundation
 
 public struct HTMLResultFormatter: XCResultFormatting {
     public init() { }
-
+    public let format: OutputFormat = .html
     public func documentPrefix(title: String) -> String {
         return htmlDocStart(with: title)
     }

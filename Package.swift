@@ -27,6 +27,11 @@ let package = Package(
             url: "https://github.com/davidahouse/XCResultKit.git",
             .upToNextMajor(from: "0.9.2")
         ),
+        .package(
+            name: "swift-collections",
+            url: "https://github.com/apple/swift-collections.git",
+            .upToNextMajor(from: "1.0.2")
+        ),
     ],
     targets: [
         .executableTarget(
@@ -44,6 +49,10 @@ let package = Package(
                 .product(
                     name: "XCResultKit",
                     package: "XCResultKit"
+                ),
+                .product(
+                    name: "Collections",
+                    package: "swift-collections"
                 ),
             ],
             path: "Sources"
