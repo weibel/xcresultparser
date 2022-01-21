@@ -83,45 +83,91 @@ class CoverageFormatter {
                 )
             }
         }
-        
+
         // Append the total coverage below the header
         if executableLines > 0 {
             let line = totalSummary(executableLines: executableLines, coveredLines: coveredLines)
             lines.insert(line, at: 1)
         }
-        
-        for target in codeCoverage.targets {
-            guard coverageTargets.contains(target.name) else { continue }
-            lines.append(contentsOf: analysis(target: target, projectExecutableLines: executableLines))
-        }
-        
+
+        let analysis = formatAnalysis(targets: codeCoverage.targets, executableLines: executableLines, coveredLines: coveredLines)
+
+        lines.append(contentsOf: analysis)
+
         return lines
     }
-    
+
+    // MARK: Private
+
+    private typealias AnalysisResult = (coverage: Double, lines: [String])
+
+    private let codeCoverage: CodeCoverage?
+    private let outputFormatter: XCResultFormatting
+    private let coverageTargets: Set<String>
+
+    private var percentFormatter: NumberFormatter = {
+        let numFormatter = NumberFormatter()
+        numFormatter.maximumFractionDigits = 1
+        return numFormatter
+    }()
+
     private func targetSummary(target: CodeCoverageTarget) -> String {
         let covPercent = percentFormatter.unwrappedString(for: target.lineCoverage * 100)
         return outputFormatter.codeCoverageTargetSummary(
             "\(target.name): \(covPercent)% (\(target.coveredLines)/\(target.executableLines))"
         )
     }
-    
+
     private func totalSummary(executableLines: Int, coveredLines: Int) -> String {
         let fraction = Double(coveredLines) / Double(executableLines)
         let covPercent: String = percentFormatter.unwrappedString(for: fraction * 100)
         let line = outputFormatter.codeCoverageTargetSummary("Total coverage: \(covPercent)% (\(coveredLines)/\(executableLines))")
         return line
     }
-    
+
     private func filesSummary(target: CodeCoverageTarget) -> String {
         let covPercent = percentFormatter.unwrappedString(for: target.lineCoverage * 100)
         return outputFormatter.codeCoverageTargetSummary(
             "\(target.name): \(covPercent)% (\(target.coveredLines)/\(target.executableLines))"
         )
     }
-    var maxFraction: Double = 0
-    private func analysis(target: CodeCoverageTarget, projectExecutableLines: Int) -> [String] {
+
+    private func formatAnalysis(targets: [CodeCoverageTarget], executableLines: Int, coveredLines: Int) -> [String] {
+        var analysisResult: [AnalysisResult] = []
+        for target in targets {
+            guard coverageTargets.contains(target.name) else { continue }
+            let result = analysis(target: target, projectExecutableLines: executableLines)
+            analysisResult.append(result)
+        }
+
+        let covered = Double(coveredLines) / Double(executableLines)
+        let combinedGain: Double = analysisResult.reduce(covered) { partialResult, result in
+            partialResult + result.coverage
+        }
+
+        let leftover = 1 - combinedGain
+        let covPercent = percentFormatter.unwrappedString(for: leftover * 100)
+        let line = outputFormatter.testConfiguration("\(covPercent)% coverage gain for all other project targets")
+        analysisResult.append((leftover, [line]))
+
+        analysisResult = analysisResult.sorted {
+            $0.coverage > $1.coverage
+        }
+
+        var result: [String] = []
+        analysisResult.forEach { _, lines in
+            lines.forEach { line in
+                result.append(line)
+            }
+        }
+
+        return result
+    }
+
+    private func analysis(target: CodeCoverageTarget, projectExecutableLines: Int) -> AnalysisResult {
         var lines: [String] = []
         let analysis = CoverageAnalyzer(files: target.files).analyze()
+        var maxFraction: Double = 0
         for analysisLine in analysis {
             let fraction = Double(analysisLine.missedLines) / Double(projectExecutableLines)
             // Discard low value items
@@ -134,26 +180,14 @@ class CoverageFormatter {
                 )
             )
         }
-        guard lines.count > 0 else { return [] }
+        guard lines.count > 0 else { return (0, []) }
         let covPercent: String = percentFormatter.unwrappedString(for: maxFraction * 100)
         lines.insert(
             outputFormatter.testConfiguration("\(covPercent)% project coverage gain potential for \(target.name)"),
             at: 0
         )
-        return lines
+        return (maxFraction, lines)
     }
-
-    // MARK: Private
-
-    private let codeCoverage: CodeCoverage?
-    private let outputFormatter: XCResultFormatting
-    private let coverageTargets: Set<String>
-
-    private var percentFormatter: NumberFormatter = {
-        let numFormatter = NumberFormatter()
-        numFormatter.maximumFractionDigits = 1
-        return numFormatter
-    }()
 }
 
 private extension CodeCoverage {
